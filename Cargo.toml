@@ -1,0 +1,6 @@
+[package]
+name = "typed_index_vec"
+version = "0.1.0"
+authors = ["Mark <mverleg.noreply@gmail.com>"]
+
+[dependencies]
