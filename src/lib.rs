@@ -2,10 +2,17 @@
 #![feature(shrink_to)]
 #![feature(vec_resize_with)]
 
-use std::alloc::CollectionAllocErr;
+use std::collections::CollectionAllocErr;
 use std::boxed::Box;
 use std::marker::PhantomData;
 use std::prelude::v1::Vec;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Error;
+use std::hash::Hash;
+use std::hash::Hasher;
+
+// TODO @mverleg: does this make $name a local type that users can implement traits for?
 
 // TODO @mverleg: is this ?Sized going to be a problem?
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -15,16 +22,13 @@ pub struct Id<Y: ?Sized> {
 }
 
 macro_rules! typed_vec {
-    ( $name: ident of $T: ty ) => {
+    ( $name: ident ) => {
 
-        // TODO @mverleg: I did the generics wrong, this way I need to do the macro for every T
-
-        #[derive(Debug)]
-        struct $name ( Vec<$T> ) ;
+        struct $name<T> ( Vec<T> ) ;
 
         #[allow(dead_code)]
-        impl $name {
-            fn from_vec(data: Vec<$T>) -> Self {
+        impl<T> $name<T> {
+            fn from_vec(data: Vec<T>) -> Self {
                 $name( data )
             }
 
@@ -67,7 +71,7 @@ macro_rules! typed_vec {
                 self.0.shrink_to(min_capacity)
             }
 
-            pub fn into_boxed_slice(self) -> Box<[$T]> {
+            pub fn into_boxed_slice(self) -> Box<[T]> {
                 self.0.into_boxed_slice()
             }
 
@@ -76,48 +80,48 @@ macro_rules! typed_vec {
             }
 
             #[inline]
-            pub fn as_slice(&self) -> &[$T] {
+            pub fn as_slice(&self) -> &[T] {
                 self.0.as_slice()
             }
 
             #[inline]
-            pub fn as_mut_slice(&mut self) -> &mut [$T] {
+            pub fn as_mut_slice(&mut self) -> &mut [T] {
                 self.0.as_mut_slice()
             }
 
             #[inline]
-            pub fn swap_remove(&mut self, index: usize) -> $T {
+            pub fn swap_remove(&mut self, index: usize) -> T {
                 self.0.swap_remove(index)
             }
 
-            pub fn insert(&mut self, index: usize, element: $T) {
+            pub fn insert(&mut self, index: usize, element: T) {
                 self.0.insert(index, element)
             }
 
-            pub fn remove(&mut self, index: usize) -> $T {
+            pub fn remove(&mut self, index: usize) -> T {
                 self.0.remove(index)
             }
 
-            pub fn retain<F>(&mut self, f: F) where F: FnMut(&$T) -> bool {
+            pub fn retain<F>(&mut self, f: F) where F: FnMut(&T) -> bool {
                 self.0.retain(f)
             }
 
             #[inline]
-            pub fn dedup_by_key<F, K>(&mut self, key: F) where F: FnMut(&mut $T) -> K, K: PartialEq {
+            pub fn dedup_by_key<F, K>(&mut self, key: F) where F: FnMut(&mut T) -> K, K: PartialEq {
                 self.0.dedup_by_key(key)
             }
 
-            pub fn dedup_by<F>(&mut self, same_bucket: F) where F: FnMut(&mut $T, &mut $T) -> bool {
+            pub fn dedup_by<F>(&mut self, same_bucket: F) where F: FnMut(&mut T, &mut T) -> bool {
                 self.0.dedup_by(same_bucket)
             }
 
             #[inline]
-            pub fn push(&mut self, value: $T) {
+            pub fn push(&mut self, value: T) {
                 self.0.push(value)
             }
 
             #[inline]
-            pub fn pop(&mut self) -> Option<$T> {
+            pub fn pop(&mut self) -> Option<T> {
                 self.0.pop()
             }
 
@@ -127,7 +131,7 @@ macro_rules! typed_vec {
             }
 
             // TODO:
-//            pub fn drain<R>(&mut self, range: R) -> Drain<$T> where R: RangeBounds<usize> {
+//            pub fn drain<R>(&mut self, range: R) -> Drain<T> where R: RangeBounds<usize> {
 //                self.0.drain(range)
 //            }
 
@@ -150,37 +154,56 @@ macro_rules! typed_vec {
                 $name::from_vec(self.0.split_off(at))
             }
 
-            pub fn resize_with<F>(&mut self, new_len: usize, f: F) where F: FnMut() -> $T {
+            pub fn resize_with<F>(&mut self, new_len: usize, f: F) where F: FnMut() -> T {
                 self.0.resize_with(new_len, f)
             }
         }
 
-        impl<T: Clone> Clone for $Name<$T> {
-            fn clone(&self) -> Vec<T> {
-                <[T]>::to_vec(&**self)
-            }
-
-            fn clone_from(&mut self, other: &Vec<T>) {
-                other.as_slice().clone_into(self);
+        impl<T: Debug> Debug for $name<T> {
+            fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+                write!(f, stringify!($name));
+                write!(f, "{{");
+                write!(f, "{:?}", self.0)?;
+                write!(f, "}}")
             }
         }
 
-        impl<T: Hash> Hash for Vec<T> {
+        impl<T: Clone> Clone for $name<T> {
+            fn clone(&self) -> Self {
+                $name::from_vec(self.0.clone())
+            }
+
+            fn clone_from(&mut self, other: &Self) {
+                self.0.clone_from(&other.0)
+            }
+        }
+
+        impl<T: Hash> Hash for $name<T> {
             #[inline]
-            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                Hash::hash(&**self, state)
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                stringify!($name).hash(state);
+                self.0.hash(state)
             }
         }
     };
 }
 
+//struct Q();
+//impl Hash for Q {
+//    #[inline]
+//    fn hash<H: Hasher>(&self, state: &mut H) {
+//        "$name".hash(state);
+//        self.0.hash(state)
+//    }
+//}
+
 #[allow(dead_code)]
-typed_vec!(MyVec of i32);
+typed_vec!(MyVec);
 
 #[allow(unused_variables, dead_code)]
 fn tmp() {
     // TODO @mverleg: remove
-    let m = MyVec::new();
+    let m = MyVec::<i32>::new();
 }
 
 #[cfg(test)]
@@ -189,16 +212,16 @@ mod tests {
 
     #[test]
     fn test_debug() {
-        typed_vec!(TestVec of i32);
-        let mut mv = TestVec::new();
-        assert_eq!("TestVec([])", format!("{:?}", mv));
+        typed_vec!(TestVec);
+        let mv = TestVec::<i32>::new();
+        assert_eq!("TestVec{[]}", format!("{:?}", mv));
         // todo: with elements
     }
 
     #[test]
     fn test_capacity() {
-        typed_vec!(TestVec of i32);
-        let mut mv = TestVec::with_capacity(7);
+        typed_vec!(TestVec);
+        let mut mv = TestVec::<i32>::with_capacity(7);
         assert_eq!(7, mv.capacity());
         mv.push(1);
         mv.push(1);
