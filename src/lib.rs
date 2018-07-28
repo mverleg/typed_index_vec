@@ -16,6 +16,9 @@ pub struct Id<Y: ?Sized> {
 
 macro_rules! typed_vec {
     ( $name: ident of $T: ty ) => {
+
+        // TODO @mverleg: I did the generics wrong, this way I need to do the macro for every T
+
         #[derive(Debug)]
         struct $name ( Vec<$T> ) ;
 
@@ -149,6 +152,23 @@ macro_rules! typed_vec {
 
             pub fn resize_with<F>(&mut self, new_len: usize, f: F) where F: FnMut() -> $T {
                 self.0.resize_with(new_len, f)
+            }
+        }
+
+        impl<T: Clone> Clone for $Name<$T> {
+            fn clone(&self) -> Vec<T> {
+                <[T]>::to_vec(&**self)
+            }
+
+            fn clone_from(&mut self, other: &Vec<T>) {
+                other.as_slice().clone_into(self);
+            }
+        }
+
+        impl<T: Hash> Hash for Vec<T> {
+            #[inline]
+            fn hash<H: hash::Hasher>(&self, state: &mut H) {
+                Hash::hash(&**self, state)
             }
         }
     };
