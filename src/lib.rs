@@ -11,6 +11,11 @@ use std::fmt::Formatter;
 use std::fmt::Error;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::iter::FromIterator;
+use std::vec::IntoIter;
+use std::slice::SliceIndex;
+use std::slice;
 
 // TODO @mverleg: does this make $name a local type that users can implement traits for?
 
@@ -178,11 +183,85 @@ macro_rules! typed_vec {
             }
         }
 
+        impl<T: PartialEq> PartialEq for $name<T> {
+            fn eq(&self, other: &Self) -> bool {
+                self.0 == other.0
+            }
+        }
+
+        impl<T: Eq> Eq for $name<T> {}
+
         impl<T: Hash> Hash for $name<T> {
             #[inline]
             fn hash<H: Hasher>(&self, state: &mut H) {
                 stringify!($name).hash(state);
                 self.0.hash(state)
+            }
+        }
+
+        impl<T> Deref for $name<T> {
+            type Target = [T];
+
+            fn deref(&self) -> &[T] {
+                self.0.deref()
+            }
+        }
+
+        impl<T> DerefMut for $name<T> {
+            fn deref_mut(&mut self) -> &mut [T] {
+                self.0.deref_mut()
+            }
+        }
+
+        impl<T> FromIterator<T> for $name<T> {
+            #[inline]
+            fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> $name<T> {
+                $name ( Vec::from_iter(iter) )
+            }
+        }
+
+        impl<T> IntoIterator for $name<T> {
+            type Item = T;
+            type IntoIter = IntoIter<T>;
+
+            #[inline]
+            fn into_iter(self) -> IntoIter<T> {
+               self.0.into_iter()
+            }
+        }
+
+        impl<'a, T> IntoIterator for &'a $name<T> {
+            type Item = &'a T;
+            type IntoIter = slice::Iter<'a, T>;
+
+            fn into_iter(self) -> slice::Iter<'a, T> {
+                self.0.iter()
+            }
+        }
+
+        impl<'a, T> IntoIterator for &'a mut $name<T> {
+            type Item = &'a mut T;
+            type IntoIter = slice::IterMut<'a, T>;
+
+            fn into_iter(self) -> slice::IterMut<'a, T> {
+                self.0.iter_mut()
+            }
+        }
+
+        // Indexing is the main thing that differentiates this from standard Vec<T>
+        impl<T, I> Index<I> for $name<T> where I: SliceIndex<[T]> {
+            type Output = I::Output;
+
+            #[inline]
+            fn index(&self, index: I) -> &Self::Output {
+                Index::index(&**self, index)
+            }
+        }
+
+        impl<T, I> IndexMut<I> for $name<T> where I: SliceIndex<[T]> {
+            #[inline]
+            fn index_mut(&mut self, index: I) -> &mut Self::Output {
+                IndexMut::index_mut(&mut **self, index)
             }
         }
     };
@@ -229,4 +308,7 @@ mod tests {
         mv.reserve(7);
         assert!(mv.capacity() >= 9);
     }
+
+    // TODO @mverleg: test more methods
+    // TODO @mverleg: test more traits
 }
